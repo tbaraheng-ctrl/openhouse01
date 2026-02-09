@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบสร้างและพิมพ์เกียรติบัตรอัตโนมัติ - โรงเรียนนราสิกขาลัย</title>
+    <!-- Tailwind CSS with Custom Config -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        nsBlue: '#002D62',
+                        nsGold: '#FFD700',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome & Fonts -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+
+    <script>
+        // *** สำคัญ: ตรวจสอบ URL นี้ให้ตรงกับ Web App URL ที่คุณ Deployment ***
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwTterP0MnkQESe8OeyjtcgHikwQabHRlSm4o5NP3Y-sS6o7AqMM9qiFpklPNv52h3HqA/exec'; 
+    </script>
+    
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+        .loader { border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #FFD700; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .preview-container { width: 100%; height: 100%; overflow: auto; display: flex; justify-content: center; align-items: flex-start; background: #e5e7eb; padding: 40px; }
+        .a4-preview { width: 210mm; height: 297mm; background: white; box-shadow: 0 10px 25px rgba(0,0,0,0.1); position: relative; overflow: hidden; transform-origin: top center; transition: transform 0.2s ease-out; flex-shrink: 0; }
+        .landscape { width: 297mm; height: 210mm; }
+        .portrait { width: 210mm; height: 297mm; }
+        .editable-element { position: absolute; cursor: move; border: 1px dashed transparent; padding: 4px; white-space: pre-wrap; min-width: 50px; text-align: center; user-select: none; }
+        .editable-element:hover { border: 1px dashed #3b82f6; }
+        .editable-element.selected { border: 2px solid #3b82f6; z-index: 1000; background: rgba(59, 130, 246, 0.05); }
+        .resizer { width: 14px; height: 14px; background: #3b82f6; border: 2px solid white; position: absolute; right: -7px; bottom: -7px; cursor: se-resize; display: none; border-radius: 50%; }
+        .editable-element.selected .resizer { display: block; }
+        .toolbar-btn { @apply p-2 rounded-lg hover:bg-gray-200 text-gray-700 w-9 h-9 flex items-center justify-center transition-all active:scale-90; }
+        
+        @media print {
+            @page { size: landscape; margin: 0; }
+            body * { visibility: hidden; }
+            #printArea, #printArea * { visibility: visible; }
+            #printArea { position: absolute; left: 0; top: 0; width: 100%; z-index: 9999; display: block !important; }
+            .print-page { break-after: page; page-break-after: always; position: relative; width: 100%; height: 100vh; overflow: hidden; }
+            .a4-preview { transform: none !important; box-shadow: none; width: 100%; height: 100%; }
+            .editable-element { border: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-nsBlue antialiased">
+
+    <!-- LOGIN PAGE -->
+    <div id="loginPage" class="min-h-screen flex flex-col items-center justify-center bg-nsBlue bg-opacity-95 p-4">
+        <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md border-t-8 border-nsGold relative overflow-hidden transition-all">
+            <div class="absolute top-0 right-0 w-24 h-24 bg-nsGold opacity-10 rounded-bl-full -mr-12 -mt-12"></div>
+            <div class="text-center mb-8">
+                <!-- โลโก้ใหม่ -->
+                <div class="w-28 h-28 mx-auto mb-6 bg-white rounded-full flex items-center justify-center shadow-lg p-2">
+                    <img src="https://www.ns.ac.th/wp-content/uploads/2024/12/cropped-logo-sq.png" alt="NS Logo" class="w-full h-full object-contain">
+                </div>
+                <h1 class="text-2xl font-bold text-nsBlue">ระบบเกียรติบัตร</h1>
+                <p class="text-nsBlue text-sm font-medium">โรงเรียนนราสิกขาลัย</p>
+            </div>
+            <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-5">
+                <div>
+                    <label class="block text-xs font-bold text-nsBlue mb-1.5 ml-1">ชื่อผู้ใช้</label>
+                    <div class="relative">
+                        <i class="fas fa-user absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <input type="text" id="username" class="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-4 focus:ring-nsBlue/10 outline-none text-nsBlue transition-all placeholder-gray-300" required placeholder="Username">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-nsBlue mb-1.5 ml-1">รหัสผ่าน</label>
+                    <div class="relative">
+                        <i class="fas fa-lock absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <input type="password" id="password" class="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-4 focus:ring-nsBlue/10 outline-none text-nsBlue transition-all placeholder-gray-300" required placeholder="Password">
+                    </div>
+                </div>
+                <button type="submit" id="btnLogin" class="w-full bg-nsBlue text-white font-bold py-3.5 rounded-xl hover:shadow-lg transition-all flex justify-center items-center gap-2 transform active:scale-95 duration-200 mt-2">
+                    <span>เข้าสู่ระบบ</span>
+                    <div id="loginSpinner" class="loader hidden border-white border-t-transparent ml-2"></div>
+                </button>
+            </form>
+            <div class="mt-8 text-center border-t pt-6">
+                <p class="text-sm text-nsBlue font-medium">ยังไม่มีบัญชี? <a href="#" onclick="toggleAuthMode('register')" class="text-nsBlue font-bold hover:underline">สมัครเข้าใช้งาน</a></p>
+            </div>
+            <!-- Register Form -->
+            <form id="registerForm" onsubmit="handleRegister(event)" class="hidden space-y-4">
+                 <h2 class="text-center text-lg font-bold text-nsBlue mb-4">สมัครสมาชิกใหม่</h2>
+                 <div>
+                     <label class="text-xs font-bold text-nsBlue block mb-1">ชื่อ-สกุล</label>
+                     <div class="relative">
+                         <i class="fas fa-id-card absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs"></i>
+                         <input type="text" id="reg_name" class="w-full pl-9 px-4 py-2 border rounded-xl text-nsBlue text-sm" required>
+                     </div>
+                 </div>
+                 <div>
+                     <label class="text-xs font-bold text-nsBlue block mb-1">บทบาท</label>
+                     <div class="relative">
+                         <i class="fas fa-user-tag absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs"></i>
+                         <select id="reg_role" class="w-full pl-9 px-4 py-2 border rounded-xl text-nsBlue text-sm bg-white"><option>ผู้ดูแลระบบ</option><option>ครู</option><option>เจ้าหน้าที่</option></select>
+                     </div>
+                 </div>
+                 <div>
+                     <label class="text-xs font-bold text-nsBlue block mb-1">ชื่อผู้ใช้</label>
+                     <div class="relative">
+                         <i class="fas fa-user absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs"></i>
+                         <input type="text" id="reg_username" class="w-full pl-9 px-4 py-2 border rounded-xl text-nsBlue text-sm" required>
+                     </div>
+                 </div>
+                 <div>
+                     <label class="text-xs font-bold text-nsBlue block mb-1">รหัสผ่าน</label>
+                     <div class="relative">
+                         <i class="fas fa-lock absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs"></i>
+                         <input type="password" id="reg_password" class="w-full pl-9 px-4 py-2 border rounded-xl text-nsBlue text-sm" required>
+                     </div>
+                 </div>
+                 <button type="submit" class="w-full bg-nsGold text-nsBlue font-bold py-3 rounded-xl shadow-lg transition-all hover:bg-yellow-400 mt-2">ยืนยันสมัคร</button>
+                 <div class="text-center mt-3"><a href="#" onclick="toggleAuthMode('login')" class="text-xs text-nsBlue underline font-medium hover:text-blue-800">กลับไปเข้าสู่ระบบ</a></div>
+            </form>
+        </div>
+        <!-- Footer Credit -->
+        <div class="mt-6 text-center">
+            <p class="text-white text-opacity-70 text-xs font-light tracking-wide">พัฒนาโดย ครูมูฮัมหมัดตัซกีน บาราเฮง โรงเรียนนราสิกขาลัย</p>
+        </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div id="appPage" class="hidden min-h-screen flex flex-col md:flex-row h-screen overflow-hidden">
+        <aside class="bg-nsBlue text-white w-full md:w-64 flex-shrink-0 z-20 flex flex-col shadow-2xl">
+            <div class="p-6 flex items-center gap-3 border-b border-white/10 bg-black/10">
+                 <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-nsBlue text-sm font-bold overflow-hidden p-1">
+                     <img src="https://www.ns.ac.th/wp-content/uploads/2024/12/cropped-logo-sq.png" class="w-full h-full object-contain">
+                 </div>
+                <div><h2 class="font-bold text-sm leading-tight">นราสิกขาลัย</h2><p class="text-[10px] text-nsGold font-bold uppercase tracking-widest">CERT PRO</p></div>
+            </div>
+            <div class="px-6 py-5 bg-white/5 border-b border-white/5">
+                <p class="text-[10px] text-gray-300 font-bold uppercase mb-1">ยินดีต้อนรับ</p>
+                <div class="font-bold text-white truncate" id="displayUser">User</div>
+            </div>
+            <nav class="flex-1 overflow-y-auto py-4">
+                <a href="#" onclick="showTab('activity')" class="flex items-center py-3 px-6 hover:bg-white/10 nav-item active-nav border-l-4 border-nsGold transition-all"><i class="fas fa-list-check w-6"></i> <span class="ml-2 text-sm font-medium">จัดการกิจกรรม</span></a>
+                <a href="#" onclick="showTab('template')" class="flex items-center py-3 px-6 hover:bg-white/10 nav-item border-l-4 border-transparent transition-all"><i class="fas fa-pencil-ruler w-6"></i> <span class="ml-2 text-sm font-medium">ออกแบบเทมเพลต</span></a>
+                <a href="#" onclick="showTab('print')" class="flex items-center py-3 px-6 hover:bg-white/10 nav-item border-l-4 border-transparent transition-all"><i class="fas fa-award w-6"></i> <span class="ml-2 text-sm font-medium">เกียรติบัตรรางวัล</span></a>
+                <a href="#" onclick="showTab('participation')" class="flex items-center py-3 px-6 hover:bg-white/10 nav-item border-l-4 border-transparent transition-all"><i class="fas fa-users w-6"></i> <span class="ml-2 text-sm font-medium">เกียรติบัตรเข้าร่วม</span></a>
+                <a href="#" onclick="showTab('organization')" class="flex items-center py-3 px-6 hover:bg-white/10 nav-item border-l-4 border-transparent transition-all"><i class="fas fa-building w-6"></i> <span class="ml-2 text-sm font-medium">เกียรติบัตรหน่วยงาน</span></a>
+            </nav>
+            <div class="p-4 border-t border-white/10"><a href="#" onclick="logout()" class="flex items-center justify-center py-2.5 px-4 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl text-xs font-bold transition-all"><i class="fas fa-sign-out-alt mr-2"></i> ออกจากระบบ</a></div>
+        </aside>
+
+        <main class="flex-1 overflow-hidden relative flex flex-col bg-gray-50">
+            <!-- Activity Section -->
+            <div id="activitySection" class="content-section p-8 overflow-auto h-full">
+                <h2 class="text-2xl font-bold text-nsBlue mb-8 flex items-center gap-3"><i class="fas fa-calendar-alt"></i> จัดการข้อมูลกิจกรรม</h2>
+                <div class="bg-white p-8 rounded-3xl shadow-sm mb-8 border border-gray-100">
+                    <form id="activityForm" onsubmit="saveActivity(event)">
+                        <input type="hidden" id="act_id">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                            <div><label class="block text-xs font-bold mb-2 text-nsBlue">กิจกรรมหลัก</label><input type="text" id="act_main" class="w-full border-gray-200 border p-3 rounded-xl outline-none focus:ring-2 focus:ring-nsBlue/20 text-nsBlue" required></div>
+                            <div><label class="block text-xs font-bold mb-2 text-nsBlue">กิจกรรมย่อย</label><input type="text" id="act_sub" class="w-full border-gray-200 border p-3 rounded-xl outline-none focus:ring-2 focus:ring-nsBlue/20 text-nsBlue" required></div>
+                            <div><label class="block text-xs font-bold mb-2 text-nsBlue">กลุ่มสาระฯ</label><input type="text" id="act_group" class="w-full border-gray-200 border p-3 rounded-xl outline-none focus:ring-2 focus:ring-nsBlue/20 text-nsBlue"></div>
+                            <div><label class="block text-xs font-bold mb-2 text-nsBlue">สถานที่</label><input type="text" id="act_loc" class="w-full border-gray-200 border p-3 rounded-xl outline-none focus:ring-2 focus:ring-nsBlue/20 text-nsBlue"></div>
+                            <div><label class="block text-xs font-bold mb-2 text-nsBlue">ผู้รับผิดชอบ</label><input type="text" id="act_owner" class="w-full border-gray-200 border p-3 rounded-xl outline-none focus:ring-2 focus:ring-nsBlue/20 text-nsBlue"></div>
+                        </div>
+                        <div class="flex gap-3">
+                            <button type="submit" id="btnSaveActivity" class="bg-nsBlue text-white px-8 py-3 rounded-xl font-bold shadow-lg transition-all">บันทึกข้อมูล <div id="saveActivitySpinner" class="loader hidden ml-2 border-white border-t-transparent"></div></button>
+                            <button type="button" onclick="resetActivityForm()" class="bg-gray-100 text-nsBlue px-6 py-3 rounded-xl font-bold transition hover:bg-gray-200">ล้างค่า</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden"><div class="overflow-x-auto"><table class="w-full text-left"><thead class="bg-gray-50 text-nsBlue uppercase text-[10px] font-black tracking-widest"><tr><th class="p-5 border-b">กิจกรรมหลัก</th><th class="p-5 border-b">กิจกรรมย่อย</th><th class="p-5 border-b">กลุ่มสาระ</th><th class="p-5 border-b">ผู้รับผิดชอบ</th><th class="p-5 border-b text-center">จัดการ</th></tr></thead><tbody id="activityTableBody" class="divide-y divide-gray-50 text-sm text-nsBlue"></tbody></table></div></div>
+            </div>
+
+            <!-- Template Section -->
+            <div id="templateSection" class="content-section hidden h-full flex flex-col">
+                <div class="p-4 bg-white border-b flex justify-between items-center shadow-sm z-10 flex-shrink-0">
+                    <h2 class="text-lg font-bold text-nsBlue flex items-center gap-2"><i class="fas fa-magic"></i> สตูดิโอออกแบบ</h2>
+                    <div class="flex gap-2"><button onclick="saveTemplateProcess()" class="bg-nsBlue text-white px-5 py-2 rounded-xl font-bold shadow hover:bg-blue-800 transition">บันทึกเทมเพลต</button></div>
+                </div>
+
+                <div class="w-full bg-white border-b overflow-y-auto p-5 flex-shrink-0 shadow-inner z-20" style="max-height: 40vh;">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                        <div class="space-y-3">
+                            <div><label class="block text-[10px] font-black text-nsBlue mb-1 uppercase">ประเภท</label><div class="flex bg-gray-100 rounded-lg p-1"><button onclick="setTemplateType('award')" id="btnTabAward" class="flex-1 py-1.5 text-xs rounded bg-white shadow-sm text-nsBlue font-bold transition">รางวัล</button><button onclick="setTemplateType('participate')" id="btnTabPart" class="flex-1 py-1.5 text-xs rounded text-nsBlue transition">เข้าร่วม</button><button onclick="setTemplateType('organization')" id="btnTabOrg" class="flex-1 py-1.5 text-xs rounded text-nsBlue transition">หน่วยงาน</button></div></div>
+                            <!-- เพิ่มปุ่ม (+) สำหรับเพิ่มกิจกรรมใหม่ -->
+                            <div>
+                                <label class="block text-[10px] font-black text-nsBlue mb-1 uppercase">1. เลือกกิจกรรมหลัก</label>
+                                <div class="flex gap-2">
+                                    <select id="tmpl_main_act" class="flex-1 border p-2.5 rounded-xl text-xs bg-blue-50 focus:ring-2 focus:ring-nsBlue/20 outline-none text-nsBlue" onchange="loadTemplateData()">
+                                        <option value="">-- เลือกกิจกรรมหลัก --</option>
+                                    </select>
+                                    <button onclick="addNewTemplateActivity()" class="bg-nsGold text-nsBlue px-3 rounded-xl hover:bg-yellow-400 transition" title="เพิ่มกิจกรรมใหม่"><i class="fas fa-plus"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Image Uploads -->
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-[10px] font-black text-nsBlue block mb-1 uppercase">พื้นหลัง (A4)</label>
+                                <div class="relative group w-full">
+                                    <input type="file" id="bg_file" accept="image/*" class="hidden" onchange="previewLocalImage(this, 'bg')">
+                                    <div id="bg_upload_ui" class="flex"><button onclick="document.getElementById('bg_file').click()" class="w-full bg-gray-50 border-2 border-dashed border-gray-200 text-[10px] py-2 rounded-xl font-bold text-nsBlue hover:border-nsBlue hover:text-nsBlue transition flex items-center justify-center gap-2"><i class="fas fa-image"></i> อัปโหลดภาพ...</button></div>
+                                    <div id="bg_preview_ui" class="hidden relative w-full h-16 bg-gray-100 rounded-xl overflow-hidden border border-gray-200 group-hover:border-nsBlue transition"><img id="form_prev_bg_thumb" src="" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition"><div class="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 bg-black/40 transition backdrop-blur-sm"><button onclick="document.getElementById('bg_file').click()" class="bg-white text-nsBlue p-1.5 rounded-lg shadow-sm hover:bg-gray-100" title="เปลี่ยนรูป"><i class="fas fa-pen text-xs"></i></button><button onclick="clearImage('bg')" class="bg-red-500 text-white p-1.5 rounded-lg shadow-sm hover:bg-red-600" title="ลบรูป"><i class="fas fa-trash-alt text-xs"></i></button></div></div>
+                                    <div id="bg_status" class="text-[9px] text-nsBlue mt-1 italic h-4 truncate"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-black text-nsBlue block mb-1 uppercase">ลายเซ็น</label>
+                                <div class="relative group w-full">
+                                    <input type="file" id="sig_file" accept="image/*" class="hidden" onchange="previewLocalImage(this, 'sig')">
+                                    <div id="sig_upload_ui" class="flex"><button onclick="document.getElementById('sig_file').click()" class="w-full bg-gray-50 border-2 border-dashed border-gray-200 text-[10px] py-2 rounded-xl font-bold text-nsBlue hover:border-nsBlue hover:text-nsBlue transition flex items-center justify-center gap-2"><i class="fas fa-signature"></i> อัปโหลดภาพ...</button></div>
+                                    <div id="sig_preview_ui" class="hidden relative w-full h-16 bg-gray-100 rounded-xl overflow-hidden border border-gray-200 group-hover:border-nsBlue transition"><img id="form_prev_sig_thumb" src="" class="w-full h-full object-contain p-1 opacity-90 group-hover:opacity-100 transition"><div class="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 bg-black/40 transition backdrop-blur-sm"><button onclick="document.getElementById('sig_file').click()" class="bg-white text-nsBlue p-1.5 rounded-lg shadow-sm hover:bg-gray-100" title="เปลี่ยนรูป"><i class="fas fa-pen text-xs"></i></button><button onclick="clearImage('sig')" class="bg-red-500 text-white p-1.5 rounded-lg shadow-sm hover:bg-red-600" title="ลบรูป"><i class="fas fa-trash-alt text-xs"></i></button></div></div>
+                                    <div id="sig_status" class="text-[9px] text-nsBlue mt-1 italic h-4 truncate"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Content A -->
+                        <div class="space-y-2">
+                            <div><label class="text-[9px] text-nsBlue font-bold uppercase block mb-1">ชื่อหน่วยงาน</label><input type="text" class="w-full border p-2 rounded-lg text-xs tmpl-input text-nsBlue" data-target="el_agency"></div>
+                            <div><label class="text-[9px] text-nsBlue font-bold uppercase block mb-1">ชื่อกิจกรรม</label><input type="text" class="w-full border p-2 rounded-lg text-xs tmpl-input text-nsBlue" data-target="el_activity_name"></div>
+                            <div><label class="text-[9px] text-nsBlue font-bold uppercase block mb-1">คำอวยพร</label><input type="text" class="w-full border p-2 rounded-lg text-xs tmpl-input text-nsBlue" data-target="el_blessing"></div>
+                            <div class="flex gap-2">
+                                <div class="w-1/2"><label class="text-[9px] text-nsBlue font-bold uppercase block mb-1">วันที่จัดกิจกรรม</label><input type="text" class="w-full border p-2 rounded-lg text-xs tmpl-input text-nsBlue" data-target="el_activity_date" placeholder="ว/ด/ป"></div>
+                                <div class="w-1/2"><label class="text-[9px] text-nsBlue font-bold uppercase block mb-1">สถานที่จัด</label><input type="text" class="w-full border p-2 rounded-lg text-xs tmpl-input text-nsBlue" data-target="el_activity_loc"></div>
+                            </div>
+                        </div>
+                        <!-- Content B -->
+                        <div class="space-y-2">
+                            <div><label class="text-[9px] text-nsBlue font-bold uppercase block mb-1">วันที่มอบ (ให้ไว้ ณ)</label><input type="text" class="w-full border p-2 rounded-lg text-xs tmpl-input text-nsBlue" data-target="el_date" placeholder="เช่น 1 มกราคม 2567"></div>
+                            <div><label class="text-[9px] text-nsBlue font-bold uppercase block mb-1">ผู้ลงนาม/ตำแหน่ง</label><input type="text" class="w-full border p-2 rounded-lg text-xs tmpl-input mb-1 text-nsBlue" data-target="el_signer" placeholder="ชื่อ-สกุล"><input type="text" class="w-full border p-2 rounded-lg text-xs tmpl-input text-nsBlue" data-target="el_position" placeholder="ตำแหน่ง"></div>
+                            <div><label class="text-[9px] text-nsBlue font-bold uppercase block mb-1">รูปแบบเลขที่เกียรติบัตร</label><input type="text" id="tmpl_start_no" class="w-full border-blue-200 border p-2 rounded-lg text-xs bg-blue-50 tmpl-input text-nsBlue" data-target="el_cert_no" placeholder="เช่น 67-001"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex-1 flex flex-col bg-gray-200 relative overflow-hidden">
+                    <div id="editorToolbar" class="h-12 bg-white border-b flex items-center px-6 gap-3 shadow-sm z-10 flex-shrink-0">
+                         <div class="flex items-center gap-1 border-r pr-3">
+                            <button onclick="undo()" class="toolbar-btn" title="Undo"><i class="fas fa-rotate-left"></i></button>
+                            <button onclick="deleteSelected()" class="toolbar-btn text-red-500" title="Delete"><i class="fas fa-trash"></i></button>
+                            <button onclick="resetTemplateDesign()" class="toolbar-btn text-blue-500" title="Reset Design"><i class="fas fa-trash-arrow-up"></i></button>
+                        </div>
+                        <div class="flex items-center gap-2 border-r pr-3">
+                            <select onchange="updateStyle('fontFamily', this.value)" class="border rounded-lg text-xs h-8 w-28 outline-none"><option value="'Prompt', sans-serif">Prompt</option><option value="'Sarabun', sans-serif">Sarabun</option></select>
+                            <input type="number" onchange="updateStyle('fontSize', this.value + 'px')" class="border rounded-lg text-xs h-8 w-14 px-1" value="16">
+                            <input type="color" onchange="updateStyle('color', this.value)" class="border rounded-lg h-8 w-8 p-1 cursor-pointer">
+                        </div>
+                        <div class="flex items-center gap-1 border-r pr-3">
+                            <button onclick="updateStyle('fontWeight', 'bold')" class="toolbar-btn"><i class="fas fa-bold"></i></button>
+                            <button onclick="updateStyle('textAlign', 'center')" class="toolbar-btn"><i class="fas fa-align-center"></i></button>
+                            <select id="page_orientation" class="border rounded-lg text-[9px] h-8 px-1 font-bold" onchange="changeOrientation()"><option value="landscape">LANDSCAPE</option><option value="portrait">PORTRAIT</option></select>
+                        </div>
+                         <div class="flex items-center gap-2 ml-auto">
+                            <button onclick="zoomOut()" class="toolbar-btn !w-7"><i class="fas fa-minus text-xs"></i></button>
+                            <span id="zoomDisplay" class="text-[9px] font-black w-8 text-center">100%</span>
+                            <button onclick="zoomIn()" class="toolbar-btn !w-7"><i class="fas fa-plus text-xs"></i></button>
+                            <button onclick="fitToScreen()" class="toolbar-btn bg-nsBlue/10 text-nsBlue"><i class="fas fa-expand-arrows-alt"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="preview-container" id="previewContainer">
+                        <div id="previewArea" class="a4-preview landscape bg-white relative" onclick="deselectElement(event)">
+                            <img id="prev_bg" src="" class="absolute inset-0 w-full h-full object-cover pointer-events-none -z-0" onerror="this.style.display='none'">
+                            <div id="el_logo" class="editable-element" style="top: 40px; left: 45%; width: 100px; z-index: 10;">
+                                <img src="https://www.ns.ac.th/wp-content/uploads/2024/12/cropped-logo-sq.png" draggable="false" style="width: 100%; height: auto; pointer-events: none; display: block;">
+                            </div>
+                            <div id="el_cert_no" class="editable-element text-sm" style="top: 50px; right: 5%; width: 20%; text-align: right;">เลขที่ ...</div>
+                            <div id="el_agency" class="editable-element font-bold text-2xl" style="color: #001f3f; top: 140px; left: 10%; width: 80%;">โรงเรียนนราสิกขาลัย</div>
+                            <div id="el_static_1" class="editable-element text-lg" style="top: 180px; left: 10%; width: 80%;">ขอมอบเกียรติบัตรฉบับนี้ให้ไว้เพื่อแสดงว่า</div>
+                            <div id="el_recipient" class="editable-element font-bold text-3xl" style="color: #001f3f; top: 220px; left: 5%; width: 90%;">[ชื่อ-สกุล ผู้รับรางวัล]</div>
+                            <div id="el_school" class="editable-element text-lg" style="color: #4b5563; top: 260px; left: 5%; width: 90%;">[โรงเรียน/สังกัด]</div>
+                            <div id="el_reward" class="editable-element font-bold text-xl" style="color: #FFD700; top: 310px; left: 5%; width: 90%;">ได้รับรางวัล [รางวัล/เหรียญ] ในการแข่งขัน [กิจกรรมย่อย]</div>
+                            <div id="el_activity_name" class="editable-element font-bold text-lg" style="top: 370px; left: 5%; width: 90%;">[ชื่อกิจกรรม]</div>
+                            <div id="el_activity_date" class="editable-element text-sm" style="top: 400px; left: 5%; width: 90%;">[วันที่จัดกิจกรรม]</div>
+                            <div id="el_activity_loc" class="editable-element text-sm" style="top: 425px; left: 5%; width: 90%;">[สถานที่จัดกิจกรรม]</div>
+                            <div id="el_blessing" class="editable-element text-sm italic" style="top: 450px; left: 10%; width: 80%;">ขออำนาจคุณพระศรีรัตนตรัย จงดลบันดาลให้ท่านประสบความสำเร็จสืบไป</div>
+                            <div id="el_date" class="editable-element text-sm" style="top: 500px; left: 10%; width: 80%;">ให้ไว้ ณ วันที่ ...</div>
+                            <div id="el_sig_img" class="editable-element" style="top: 540px; left: 40%; width: 20%; z-index: 15;"><img id="prev_sig" src="" class="w-full pointer-events-none" onerror="this.style.display='none'" style="display:block;"></div>
+                            <div id="el_signer" class="editable-element font-bold" style="top: 600px; left: 30%; width: 40%;">[ชื่อผู้ลงนาม]</div>
+                            <div id="el_position" class="editable-element text-sm" style="top: 630px; left: 30%; width: 40%;">[ตำแหน่ง]</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Print Section -->
+            <div id="printSection" class="content-section hidden p-8 overflow-auto h-full">
+                <div class="flex justify-between items-center mb-8"><h2 class="text-2xl font-bold text-nsBlue flex items-center gap-3"><i class="fas fa-medal"></i> คิวพิมพ์เกียรติบัตรรางวัล</h2></div>
+                <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="p-6 border-b flex justify-between items-center bg-gray-50/50">
+                        <h3 class="font-bold text-nsBlue text-xs uppercase tracking-widest">ดึงข้อมูลจากชีท "ผลการแข่งขัน"</h3>
+                        <div class="flex gap-2">
+                            <button onclick="printAllPending()" class="bg-nsGold text-nsBlue px-5 py-2 rounded-xl text-xs font-bold shadow-sm hover:shadow-md transition">พิมพ์คิวทั้งหมด</button>
+                            <button id="btnRefreshQueue" onclick="loadPrintQueue()" class="text-xs text-nsBlue font-bold hover:bg-blue-50 px-4 py-2 rounded-xl border border-blue-100 transition"><i class="fas fa-sync-alt"></i> อัปเดต</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto"><table class="w-full text-left"><thead class="bg-gray-50 text-nsBlue text-[10px] uppercase font-black tracking-widest"><tr><th class="p-5 border-b">ผู้รับรางวัล</th><th class="p-5 border-b">โรงเรียน</th><th class="p-5 border-b">รางวัล</th><th class="p-5 border-b">สถานะ</th><th class="p-5 border-b text-right">คำสั่ง</th></tr></thead><tbody id="printQueueBody" class="divide-y divide-gray-50 text-sm text-nsBlue"></tbody></table></div>
+                </div>
+            </div>
+
+            <!-- Participation Section -->
+            <div id="participationSection" class="content-section hidden p-8 overflow-auto h-full">
+                <h2 class="text-2xl font-bold text-nsBlue mb-8 flex items-center gap-3"><i class="fas fa-users"></i> เกียรติบัตรผู้เข้าร่วม</h2>
+                <div class="bg-white p-8 rounded-3xl shadow-sm mb-8 border border-gray-100 relative overflow-hidden">
+                    <div class="flex flex-col md:flex-row gap-6 items-end relative z-10">
+                        <div class="flex-1 w-full">
+                            <label class="block text-xs font-bold mb-3 text-nsBlue uppercase tracking-widest">สร้างรายชื่อจากชีท "ลงทะเบียน"</label>
+                            <select id="part_activity_select" class="w-full border-gray-200 border p-3 rounded-xl focus:ring-4 focus:ring-nsBlue/10 outline-none font-medium text-sm text-nsBlue"><option value="">-- เลือกกิจกรรมเพื่อกรองรายชื่อ --</option></select>
+                        </div>
+                        <button onclick="generateParticipationList()" class="bg-nsBlue text-white px-8 py-3.5 rounded-xl hover:shadow-lg font-bold flex items-center gap-2 transition-all active:scale-95"><i class="fas fa-magic"></i> ประมวลผลรายชื่อ</button>
+                    </div>
+                </div>
+                <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="p-6 border-b flex justify-between items-center bg-gray-50/50">
+                        <h3 class="font-bold text-nsBlue text-xs uppercase tracking-widest">รายการที่ประมวลผลแล้ว</h3>
+                        <button onclick="loadParticipationList()" class="text-xs text-nsBlue font-bold hover:underline"><i class="fas fa-sync"></i> รีเฟรช</button>
+                    </div>
+                    <div class="overflow-x-auto"><table class="w-full text-left"><thead class="bg-gray-50 text-nsBlue text-[10px] uppercase font-black"><tr><th class="p-5 border-b">ผู้รับ</th><th class="p-5 border-b">โรงเรียน</th><th class="p-5 border-b text-right">คำสั่ง</th></tr></thead><tbody id="participationTableBody" class="divide-y divide-gray-50 text-sm text-nsBlue"></tbody></table></div>
+                </div>
+            </div>
+
+            <!-- Organization Section (NEW) -->
+            <div id="organizationSection" class="content-section hidden p-8 overflow-auto h-full">
+                <div class="flex justify-between items-center mb-8"><h2 class="text-2xl font-bold text-nsBlue flex items-center gap-3"><i class="fas fa-building"></i> เกียรติบัตรหน่วยงาน</h2></div>
+                <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="p-6 border-b flex justify-between items-center bg-gray-50/50">
+                        <h3 class="font-bold text-nsBlue text-xs uppercase tracking-widest">ข้อมูลจากชีท "หน่วยงาน" (ใช้เทมเพลตเข้าร่วม)</h3>
+                        <div class="flex gap-2">
+                            <button onclick="printSelectedOrg()" class="bg-nsGold text-nsBlue px-5 py-2 rounded-xl text-xs font-bold shadow-sm hover:shadow-md transition">พิมพ์ที่เลือก</button>
+                            <button id="btnRefreshOrg" onclick="loadOrganizationList()" class="text-xs text-nsBlue font-bold hover:bg-blue-50 px-4 py-2 rounded-xl border border-blue-100 transition"><i class="fas fa-sync-alt"></i> อัปเดต</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-gray-50 text-nsBlue text-[10px] uppercase font-black tracking-widest">
+                                <tr>
+                                    <th class="p-5 border-b w-10 text-center"><input type="checkbox" onchange="toggleSelectAllOrg(this)" class="rounded text-nsBlue focus:ring-nsBlue"></th>
+                                    <th class="p-5 border-b">ชื่อหน่วยงาน</th>
+                                    <th class="p-5 border-b">กิจกรรม</th>
+                                    <th class="p-5 border-b">สถานะ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="organizationTableBody" class="divide-y divide-gray-50 text-sm text-nsBlue"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="printPreviewModal" class="fixed inset-0 bg-nsBlue/80 hidden z-50 flex flex-col justify-center items-center backdrop-blur-md transition-opacity duration-300">
+        <div class="bg-white rounded-[2rem] w-[95%] h-[90%] flex flex-col shadow-2xl relative overflow-hidden transform transition-all duration-300 scale-95 opacity-0" id="previewModalBody">
+            <div class="bg-nsBlue text-white p-5 flex justify-between items-center z-10 shadow-lg">
+                <div class="flex items-center gap-6">
+                    <h3 class="text-lg font-bold tracking-tight">ตรวจทานก่อนสั่งพิมพ์</h3>
+                    <!-- ฟังก์ชันเลือกโหมดการพิมพ์ -->
+                    <div class="flex items-center gap-3 bg-white/10 p-2 px-4 rounded-xl border border-white/20">
+                        <label class="text-[10px] font-black uppercase tracking-widest text-nsGold">รูปแบบการพิมพ์:</label>
+                        <select id="print_mode_select" class="text-xs font-bold text-white outline-none bg-transparent cursor-pointer">
+                            <option value="full" class="text-nsBlue">พิมพ์เต็มรูปแบบ (มีพื้นหลัง)</option>
+                            <option value="text" class="text-nsBlue">พิมพ์เฉพาะข้อความ (ไม่มีพื้นหลัง)</option>
+                        </select>
+                    </div>
+                </div>
+                <button onclick="closePreview()" class="hover:bg-white/20 w-10 h-10 rounded-xl transition-colors"><i class="fas fa-times text-lg"></i></button>
+            </div>
+            <div id="modalPreviewContainer" class="flex-1 overflow-auto bg-gray-200 p-12 flex flex-col items-center gap-10"></div>
+            <div class="bg-white p-6 border-t flex justify-end gap-4 z-10 shadow-inner">
+                <button onclick="closePreview()" class="px-8 py-3 rounded-xl font-bold border text-nsBlue hover:bg-gray-50 transition">ยกเลิก</button>
+                <button onclick="confirmPrint()" class="px-10 py-3 rounded-xl bg-nsBlue text-white font-bold hover:shadow-xl transition-all flex items-center gap-2"><i class="fas fa-print"></i> เริ่มพิมพ์และบันทึกลงระบบ</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="printArea" class="hidden"></div>
+    <div id="captureContainer" style="position:fixed; top:-9999px; left:-9999px;"></div>
+
+    <script>
+        // -- Logic Variables --
+        let currentUser = null, activities = [], currentTemplateType = 'award', printQueue = [], participationQueue = [], organizationQueue = [], selectedElement = null, isDragging = false, isResizing = false, dragOffset = {x:0,y:0}, resizeStart = {x:0,y:0,w:0,h:0}, historyStack = [], currentZoom = 0.6, idsToPrint = [], fileUploadQueue = {bg:null, sig:null}, currentImageIds = {bg:null, sig:null}, initialPreviewHTML = '';
+
+        // -- Initialization --
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedUser = localStorage.getItem('ns_user');
+            if (savedUser) { 
+                currentUser = JSON.parse(savedUser); 
+                document.getElementById('username').value = currentUser.username || ''; 
+                initApp(); 
+            }
+            setupEditorInteractions();
+            updateZoomDisplay();
+            initialPreviewHTML = document.getElementById('previewArea').innerHTML;
+        });
+
+        async function callAPI(data) {
+            try { 
+                const response = await fetch(SCRIPT_URL, { method: 'POST', redirect: 'follow', headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(data) }); 
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); 
+                return await response.json(); 
+            } catch (error) { return { status: 'error', message: error.message }; }
+        }
+
+        // -- Authentication --
+        function toggleAuthMode(mode) { 
+            if (mode === 'register') { document.getElementById('loginForm').classList.add('hidden'); document.getElementById('registerForm').classList.remove('hidden'); } 
+            else { document.getElementById('loginForm').classList.remove('hidden'); document.getElementById('registerForm').classList.add('hidden'); } 
+        }
+        async function handleLogin(e) { 
+            e.preventDefault(); const btn = document.getElementById('btnLogin'); const sp = document.getElementById('loginSpinner'); btn.disabled = true; sp.classList.remove('hidden'); 
+            const res = await callAPI({ action: 'login', username: document.getElementById('username').value, password: document.getElementById('password').value }); 
+            btn.disabled = false; sp.classList.add('hidden'); 
+            if (res.status === 'success') { currentUser = res.user; localStorage.setItem('ns_user', JSON.stringify(res.user)); initApp(); } 
+            else { Swal.fire('Error', res.message, 'error'); } 
+        }
+        async function handleRegister(e) {
+            e.preventDefault();
+            const res = await callAPI({ action: 'register', name: document.getElementById('reg_name').value, role: document.getElementById('reg_role').value, username: document.getElementById('reg_username').value, password: document.getElementById('reg_password').value });
+            if (res.status === 'success') { Swal.fire('สำเร็จ', res.message, 'success'); toggleAuthMode('login'); } 
+            else { Swal.fire('Error', res.message, 'error'); }
+        }
+        function logout() { localStorage.removeItem('ns_user'); window.location.reload(); }
+        function initApp() { document.getElementById('loginPage').classList.add('hidden'); document.getElementById('appPage').classList.remove('hidden'); document.getElementById('displayUser').innerText = currentUser.name; loadActivities(); }
+
+        // -- Editor Engine --
+        function setupEditorInteractions() {
+            const container = document.getElementById('previewContainer');
+            if(!container) return;
+            container.addEventListener('mousedown', startInteraction);
+            container.addEventListener('mousemove', handleInteraction);
+            container.addEventListener('mouseup', endInteraction);
+            container.addEventListener('mouseleave', endInteraction);
+            document.querySelectorAll('.tmpl-input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const targetId = e.target.getAttribute('data-target');
+                    const element = document.getElementById(targetId);
+                    if(element) element.innerText = e.target.value;
+                });
+            });
+        }
+        function selectElement(el) {
+            if(selectedElement) { selectedElement.classList.remove('selected'); const old = selectedElement.querySelector('.resizer'); if(old) old.remove(); }
+            selectedElement = el; selectedElement.classList.add('selected');
+            const resizer = document.createElement('div'); resizer.className = 'resizer'; selectedElement.appendChild(resizer);
+        }
+        function deselectElement(e) {
+            if(e.target.id === 'previewArea' || e.target.id === 'prev_bg') {
+                if(selectedElement) { selectedElement.classList.remove('selected'); const old = selectedElement.querySelector('.resizer'); if(old) old.remove(); }
+                selectedElement = null;
+            }
+        }
+        function startInteraction(e) {
+            if(e.target.classList.contains('resizer')) { e.preventDefault(); isResizing = true; resizeStart = { x: e.clientX, y: e.clientY, w: selectedElement.offsetWidth, h: selectedElement.offsetHeight }; return; }
+            if(e.target.classList.contains('editable-element')) { e.preventDefault(); isDragging = true; selectElement(e.target); const elRect = selectedElement.getBoundingClientRect(); dragOffset.x = e.clientX - elRect.left; dragOffset.y = e.clientY - elRect.top; }
+        }
+        function handleInteraction(e) {
+            if(isResizing && selectedElement) { e.preventDefault(); const deltaX = (e.clientX - resizeStart.x) / currentZoom; selectedElement.style.width = Math.max(20, resizeStart.w + deltaX) + 'px'; } 
+            else if(isDragging && selectedElement) { e.preventDefault(); const containerRect = document.getElementById('previewArea').getBoundingClientRect(); const newX = (e.clientX - containerRect.left - dragOffset.x) / currentZoom; const newY = (e.clientY - containerRect.top - dragOffset.y) / currentZoom; selectedElement.style.left = newX + 'px'; selectedElement.style.top = newY + 'px'; }
+        }
+        function endInteraction(e) { if(isDragging || isResizing) { isDragging = false; isResizing = false; saveHistory(); } }
+        function updateStyle(property, value) { if(selectedElement) { saveHistory(); selectedElement.style[property] = value; } }
+        function deleteSelected() { if(selectedElement) { saveHistory(); selectedElement.style.display = 'none'; selectedElement = null; } }
+        function saveHistory() { const html = document.getElementById('previewArea').innerHTML; if(historyStack.length > 15) historyStack.shift(); historyStack.push(html); }
+        function undo() { if(historyStack.length > 0) { document.getElementById('previewArea').innerHTML = historyStack.pop(); selectedElement = null; } }
+        
+        function resetTemplateDesign(askConfirm = true) {
+            if(askConfirm && !confirm('รีเซ็ตการออกแบบทั้งหมด?')) return;
+            document.querySelectorAll('.tmpl-input').forEach(i => i.value = '');
+            currentImageIds = { bg: null, sig: null }; fileUploadQueue = { bg: null, sig: null };
+            document.getElementById('bg_status').innerText = ''; document.getElementById('sig_status').innerText = '';
+            document.getElementById('previewArea').innerHTML = initialPreviewHTML;
+            document.getElementById('prev_bg').src = ''; document.getElementById('prev_bg').style.display = 'none';
+            document.getElementById('prev_sig').src = ''; document.getElementById('prev_sig').style.display = 'none';
+            updateFormPreview('bg', null);
+            updateFormPreview('sig', null);
+        }
+
+        // -- Designer Tools --
+        function updateZoomDisplay() { 
+            const d = document.getElementById('zoomDisplay'); 
+            if(d) d.innerText = Math.round(currentZoom * 100) + '%'; 
+            document.getElementById('previewArea').style.transform = `scale(${currentZoom})`; 
+        }
+        function zoomIn() { currentZoom += 0.1; updateZoomDisplay(); }
+        function zoomOut() { if(currentZoom > 0.2) currentZoom -= 0.1; updateZoomDisplay(); }
+        function fitToScreen() {
+            const c = document.getElementById('previewContainer'); const a = document.getElementById('previewArea'); 
+            if(!c || !a) return; currentZoom = Math.min((c.clientWidth - 80) / a.offsetWidth, (c.clientHeight - 80) / a.offsetHeight); 
+            if(currentZoom > 1.2) currentZoom = 1.2; updateZoomDisplay();
+        }
+        function changeOrientation() {
+            const val = document.getElementById('page_orientation').value;
+            document.getElementById('previewArea').className = `a4-preview ${val} bg-white relative`;
+            setTimeout(fitToScreen, 100);
+        }
+
+        // -- File Management --
+        function updateFormPreview(type, src) {
+            const uploadUI = document.getElementById(type + '_upload_ui');
+            const previewUI = document.getElementById(type + '_preview_ui');
+            const img = document.getElementById('form_prev_' + type + '_thumb');
+            if (src) { uploadUI.classList.add('hidden'); previewUI.classList.remove('hidden'); img.src = src; } 
+            else { uploadUI.classList.remove('hidden'); previewUI.classList.add('hidden'); img.src = ''; }
+        }
+        function previewLocalImage(input, type) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0]; fileUploadQueue[type] = file;
+                const reader = new FileReader(); reader.onload = (e) => {
+                    const img = document.getElementById(type === 'bg' ? 'prev_bg' : 'prev_sig');
+                    img.src = e.target.result; img.style.display = 'block';
+                    document.getElementById(type+'_status').innerText = 'รอการบันทึก (New)';
+                    updateFormPreview(type, e.target.result);
+                }; reader.readAsDataURL(file);
+            }
+        }
+        function clearImage(type, ask = true) {
+            if(!ask || confirm('ลบรูปภาพนี้?')) {
+                document.getElementById(type === 'bg' ? 'bg_file' : 'sig_file').value = '';
+                const img = document.getElementById(type === 'bg' ? 'prev_bg' : 'prev_sig'); img.src = ''; img.style.display = 'none';
+                fileUploadQueue[type] = null; currentImageIds[type] = null; document.getElementById(type+'_status').innerText = '';
+                updateFormPreview(type, null);
+            }
+        }
+
+        // -- Template Logic --
+        function setTemplateType(type) {
+            currentTemplateType = type;
+            document.getElementById('btnTabAward').className = type === 'award' ? 'flex-1 py-1.5 text-xs rounded bg-white shadow-sm text-nsBlue font-bold transition' : 'flex-1 py-1.5 text-xs rounded text-gray-500 transition';
+            document.getElementById('btnTabPart').className = type === 'participate' ? 'flex-1 py-1.5 text-xs rounded bg-white shadow-sm text-nsBlue font-bold transition' : 'flex-1 py-1.5 text-xs rounded text-gray-500 transition';
+            document.getElementById('btnTabOrg').className = type === 'organization' ? 'flex-1 py-1.5 text-xs rounded bg-white shadow-sm text-nsBlue font-bold transition' : 'flex-1 py-1.5 text-xs rounded text-gray-500 transition';
+            const rewardEl = document.getElementById('el_reward');
+            if(rewardEl) {
+                if (type === 'award') rewardEl.innerText = 'ได้รับรางวัล [รางวัล/เหรียญ] ในการแข่งขัน [กิจกรรมย่อย]';
+                else if (type === 'participate') rewardEl.innerText = 'ได้เข้าร่วมกิจกรรม [กิจกรรมย่อย]';
+                else if (type === 'organization') rewardEl.innerText = 'ได้ให้การสนับสนุนกิจกรรม [กิจกรรมย่อย]';
+            }
+            // Add Fix: Reload List and Reset Design
+            loadTemplateList(type).then(() => {
+                resetTemplateDesign(false);
+            });
+        }
+        
+        async function loadTemplateList(type) {
+            const select = document.getElementById('tmpl_main_act');
+            select.innerHTML = '<option value="">-- กำลังโหลด... --</option>';
+            
+            try {
+                const res = await callAPI({ action: 'getTemplateList', type: type });
+                select.innerHTML = '<option value="">-- เลือกกิจกรรมหลัก --</option>';
+                
+                if(res.status === 'success' && res.data) {
+                    res.data.forEach(item => {
+                        const option = document.createElement('option');
+                        option.value = item;
+                        option.innerText = item;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (e) {
+                select.innerHTML = '<option value="">-- โหลดผิดพลาด --</option>';
+                console.error(e);
+            }
+        }
+        
+        function populateTemplateSelect() {
+            const select = document.getElementById('tmpl_main_act'); 
+             loadTemplateList(currentTemplateType);
+        }
+
+        async function saveTemplateProcess() {
+            const mainAct = document.getElementById('tmpl_main_act').value; if(!mainAct) return Swal.fire('Error', 'เลือกกิจกรรมก่อน', 'warning');
+            Swal.fire({ title: 'บันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                if (fileUploadQueue.bg) { const res = await callAPI({ action: 'uploadImage', imageStr: await fileToBase64(fileUploadQueue.bg), fileName: 'BG_'+Date.now() }); if (res.status === 'success') currentImageIds.bg = res.fileId; }
+                if (fileUploadQueue.sig) { const res = await callAPI({ action: 'uploadImage', imageStr: await fileToBase64(fileUploadQueue.sig), fileName: 'SIG_'+Date.now() }); if (res.status === 'success') currentImageIds.sig = res.fileId; }
+                document.querySelectorAll('.resizer').forEach(r => r.remove());
+                const elementsData = {}; document.querySelectorAll('.editable-element').forEach(el => { elementsData[el.id] = { style: el.getAttribute('style'), text: el.innerText }; });
+                const formData = { 
+                    agency: document.querySelector('[data-target="el_agency"]').value, 
+                    activity_name: document.querySelector('[data-target="el_activity_name"]').value, 
+                    activity_date: document.querySelector('[data-target="el_activity_date"]').value, 
+                    activity_loc: document.querySelector('[data-target="el_activity_loc"]').value,   
+                    date: document.querySelector('[data-target="el_date"]').value,                   
+                    signer: document.querySelector('[data-target="el_signer"]').value, 
+                    position: document.querySelector('[data-target="el_position"]').value, 
+                    blessing: document.querySelector('[data-target="el_blessing"]').value,
+                    start_no: document.getElementById('tmpl_start_no').value, 
+                    orientation: document.getElementById('page_orientation').value, 
+                    layout: elementsData, 
+                    bgImageId: currentImageIds.bg, 
+                    sigImageId: currentImageIds.sig 
+                };
+                const res = await callAPI({ action: 'saveTemplate', type: currentTemplateType, main_activity_key: mainAct, formData: formData });
+                if(res.status === 'success') {
+                     Swal.fire('สำเร็จ', 'บันทึกเรียบร้อย', 'success'); 
+                     loadTemplateList(currentTemplateType).then(() => {
+                         document.getElementById('tmpl_main_act').value = mainAct;
+                     });
+                } else throw new Error(res.message);
+            } catch (error) { Swal.fire('Error', error.message, 'error'); }
+        }
+        async function loadTemplateData() {
+            const mainAct = document.getElementById('tmpl_main_act').value; 
+            
+            fileUploadQueue = {bg:null, sig:null};
+
+            if(!mainAct) { resetTemplateDesign(false); return; }
+            Swal.fire({title: 'กำลังโหลด...', didOpen:()=>Swal.showLoading()});
+            const res = await callAPI({ action: 'getTemplate', type: currentTemplateType, activityId: mainAct }); 
+            Swal.close();
+            if(res.status === 'success') {
+                const d = res.data; document.getElementById('tmpl_start_no').value = d.start_no || '';
+                document.getElementById('page_orientation').value = d.orientation || 'landscape'; changeOrientation();
+                
+                if(d.bgImageBase64) { 
+                    document.getElementById('prev_bg').src = d.bgImageBase64; 
+                    document.getElementById('prev_bg').style.display = 'block'; 
+                    currentImageIds.bg = d.bgImageId; 
+                    document.getElementById('bg_status').innerText = 'Loaded from Cloud'; 
+                    updateFormPreview('bg', d.bgImageBase64);
+                } else { 
+                    document.getElementById('prev_bg').src = ''; 
+                    document.getElementById('prev_bg').style.display = 'none';
+                    currentImageIds.bg = null;
+                    updateFormPreview('bg', null); 
+                }
+
+                if(d.sigImageBase64) { 
+                    document.getElementById('prev_sig').src = d.sigImageBase64; 
+                    document.getElementById('prev_sig').style.display = 'block'; 
+                    currentImageIds.sig = d.sigImageId; 
+                    document.getElementById('sig_status').innerText = 'Loaded from Cloud'; 
+                    updateFormPreview('sig', d.sigImageBase64);
+                } else { 
+                    document.getElementById('prev_sig').src = ''; 
+                    document.getElementById('prev_sig').style.display = 'none';
+                    currentImageIds.sig = null;
+                    updateFormPreview('sig', null); 
+                }
+
+                if(d.layout) for (const [id, val] of Object.entries(d.layout)) { const el = document.getElementById(id); if(el) el.setAttribute('style', val.style); }
+                const map = { el_agency: d.agency, el_activity_name: d.activity_name, el_activity_date: d.activity_date, el_activity_loc: d.activity_loc, el_date: d.date, el_signer: d.signer, el_position: d.position, el_blessing: d.blessing };
+                for(let k in map) { const el = document.querySelector(`[data-target="${k}"]`); if(el) { el.value = map[k] || ''; el.dispatchEvent(new Event('input')); } }
+            } else {
+                resetTemplateDesign(false);
+                const elActName = document.querySelector('[data-target="el_activity_name"]'); if(elActName) { elActName.value = mainAct; elActName.dispatchEvent(new Event('input')); }
+                Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'เริ่มสร้างเทมเพลตใหม่', showConfirmButton: false, timer: 2000 });
+            }
+        }
+        
+        async function addNewTemplateActivity() {
+             const { value: text } = await Swal.fire({
+                input: 'text',
+                inputLabel: 'ชื่อกิจกรรมหลักใหม่',
+                inputPlaceholder: 'กรอกชื่อกิจกรรม...',
+                showCancelButton: true
+            });
+
+            if (text) {
+                const select = document.getElementById('tmpl_main_act');
+                const option = document.createElement('option');
+                option.value = text;
+                option.text = text;
+                select.add(option);
+                select.value = text;
+                loadTemplateData();
+            }
+        }
+
+        function fileToBase64(file) { return new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = e => reject(e); r.readAsDataURL(file); }); }
+
+        // -- Activity Manager --
+        async function loadActivities() { const res = await callAPI({ action: 'getActivities' }); if (res.status === 'success') { activities = res.data; renderActivityTable(); } }
+        function renderActivityTable() {
+            const tb = document.getElementById('activityTableBody'); tb.innerHTML = '';
+            activities.forEach(i => { tb.innerHTML += `<tr class="border-b hover:bg-gray-50/50"><td class="p-5 font-bold text-nsBlue">${i.main_activity}</td><td class="p-5">${i.sub_activity}</td><td class="p-5 text-gray-400 text-xs">${i.group_name}</td><td class="p-5">${i.owner}</td><td class="p-5 text-center"><button onclick="editActivity('${i.id}')" class="text-blue-600 mx-1"><i class="fas fa-edit"></i></button><button onclick="deleteActivity('${i.id}')" class="text-red-500 mx-1"><i class="fas fa-trash"></i></button></td></tr>`; });
+        }
+        async function saveActivity(e) { 
+            e.preventDefault(); const btn = document.getElementById('btnSaveActivity'); const sp = document.getElementById('saveActivitySpinner'); btn.disabled=true; sp.classList.remove('hidden'); 
+            await callAPI({ action: 'saveActivity', id: document.getElementById('act_id').value, main_activity: document.getElementById('act_main').value, sub_activity: document.getElementById('act_sub').value, location: document.getElementById('act_loc').value, group_name: document.getElementById('act_group').value, owner: document.getElementById('act_owner').value }); 
+            btn.disabled=false; sp.classList.add('hidden'); loadActivities(); resetActivityForm(); Swal.fire({ toast:true, position:'top-end', icon:'success', title:'บันทึกสำเร็จ', timer:2000 }); 
+        }
+        function resetActivityForm() { document.getElementById('activityForm').reset(); document.getElementById('act_id').value = ''; }
+        function editActivity(id) { const i = activities.find(a => a.id.toString() === id.toString()); if(i) { document.getElementById('act_id').value = i.id; document.getElementById('act_main').value = i.main_activity; document.getElementById('act_sub').value = i.sub_activity; document.getElementById('act_loc').value = i.location; document.getElementById('act_group').value = i.group_name; document.getElementById('act_owner').value = i.owner; } }
+        function deleteActivity(id) { Swal.fire({title:'ยืนยันลบ?', icon:'warning', showCancelButton:true}).then(r=>{ if(r.isConfirmed) callAPI({action:'deleteActivity',id}).then(loadActivities); }); }
+
+        // -- Data Loading Functions (Moved here to fix ReferenceError) --
+        function populateParticipationSelect() {
+            const select = document.getElementById('part_activity_select'); const uniqueMain = [...new Set(activities.map(item => item.main_activity))];
+            select.innerHTML = '<option value="">-- เลือกกิจกรรมเพื่อกรองรายชื่อ --</option>'; uniqueMain.forEach(m => { select.innerHTML += `<option value="${m}">${m}</option>`; });
+        }
+
+        async function loadOrganizationList() {
+            const btn = document.getElementById('btnRefreshOrg');
+            if(btn) { 
+                btn.disabled = true; 
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังอัปเดต'; 
+            }
+
+            try {
+                const res = await callAPI({ action: 'getOrganizationList' });
+                if(res.status === 'success') {
+                    organizationQueue = res.data;
+                    const tb = document.getElementById('organizationTableBody');
+                    tb.innerHTML = '';
+                    organizationQueue.forEach(item => {
+                        const isPrinted = item.status === 'พิมพ์แล้ว';
+                        const checkbox = isPrinted ? '' : `<input type="checkbox" value="${item.id}" class="org-checkbox rounded text-nsBlue focus:ring-nsBlue w-4 h-4 cursor-pointer">`;
+                        const statusBadge = isPrinted 
+                            ? `<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-[10px] font-bold">พิมพ์แล้ว</span>` 
+                            : `<span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-[10px] font-bold">รอพิมพ์</span>`;
+                        
+                        tb.innerHTML += `
+                            <tr class="border-b hover:bg-gray-50/50">
+                                <td class="p-5 text-center">${checkbox}</td>
+                                <td class="p-5 font-bold text-nsBlue">${item.student}</td>
+                                <td class="p-5 text-sm">${item.activity}</td>
+                                <td class="p-5">${statusBadge}</td>
+                            </tr>
+                        `;
+                    });
+                }
+            } finally {
+                if(btn) { 
+                    btn.disabled = false; 
+                    btn.innerHTML = '<i class="fas fa-sync-alt"></i> อัปเดต'; 
+                }
+            }
+        }
+
+        // -- Navigation --
+        function showTab(tabId) { 
+            document.querySelectorAll('.content-section').forEach(el => el.classList.add('hidden')); 
+            document.getElementById(tabId + 'Section').classList.remove('hidden'); 
+            
+            // Logic for specific tabs
+            if(tabId === 'template') { 
+                loadTemplateList(currentTemplateType); 
+                setTimeout(fitToScreen, 100); 
+            } 
+            if(tabId === 'print') loadPrintQueue(); 
+            if(tabId === 'participation') { 
+                 populateParticipationSelect(); 
+                 loadParticipationList(); 
+            }
+            if(tabId === 'organization') loadOrganizationList(); 
+            
+            document.querySelectorAll('.nav-item').forEach(el => { el.classList.remove('active-nav', 'border-nsGold', 'bg-white/10'); el.classList.add('border-transparent'); }); 
+            const activeNav = document.querySelector(`.nav-item[onclick="showTab('${tabId}')"]`); if(activeNav) activeNav.classList.add('active-nav', 'border-nsGold', 'bg-white/10'); 
+        }
+
+        // -- Print Management --
+        function incrementCode(c) { if(!c) return "1"; return c.replace(/(\d+)$/, m => String(parseInt(m) + 1).padStart(m.length, '0')); }
+        async function fetchAndSetNextCertNo() { const res = await callAPI({ action: 'getLastCertNo' }); return (res.status === 'success' && res.lastNo) ? incrementCode(res.lastNo) : (document.getElementById('tmpl_start_no').value || '001'); }
+        async function loadPrintQueue() {
+            const btn = document.getElementById('btnRefreshQueue'); if(btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+            const res = await callAPI({ action: 'getPrintQueue' }); if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> อัปเดต'; }
+            if(res.status === 'success') {
+                printQueue = res.data; const tb = document.getElementById('printQueueBody'); tb.innerHTML = '';
+                printQueue.forEach(i => {
+                    const sName = String(i.student).replace(/[\[\]"]/g, '');
+                    tb.innerHTML += `<tr class="border-b hover:bg-gray-50/50"><td class="p-5 font-bold text-nsBlue">${sName}</td><td class="p-5 text-xs text-gray-500">${i.school}</td><td class="p-5 text-nsGold font-bold">${i.award_name} ${i.medal}</td><td class="p-5"><span class="px-2 py-1 rounded-lg text-[10px] font-bold ${i.status === 'พิมพ์แล้ว' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">${i.status}</span></td><td class="p-5 text-right"><button onclick="printCert('${i.id}')" class="bg-nsBlue text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-sm">พิมพ์</button></td></tr>`;
+                });
+            }
+        }
+        async function printCert(id) { 
+            const item = printQueue.find(x => x.id.toString() === id.toString()) || participationQueue.find(x => x.id.toString() === id.toString()) || organizationQueue.find(x => x.id.toString() === id.toString()); 
+            if(item) { idsToPrint = [id]; Swal.fire({title: 'เตรียมข้อมูล...', didOpen:()=>Swal.showLoading()}); const nextNo = await fetchAndSetNextCertNo(); Swal.close(); 
+                let combined = ''; const names = String(item.student).replace(/[\[\]"]/g, '').split(/,|\n/).map(n => n.trim()).filter(n => n.length > 0);
+                let current = nextNo; names.forEach(n => { combined += generateSingleCertHTML(item, n, current); current = incrementCode(current); });
+                document.getElementById('printPreviewModal').dataset.startNo = nextNo; showPreview(combined);
+            } 
+        }
+        function generateSingleCertHTML(item, name, no) {
+            const dom = document.getElementById('previewArea').cloneNode(true); dom.querySelectorAll('.resizer').forEach(e=>e.remove());
+            dom.style.transform='none'; dom.style.boxShadow='none'; dom.style.margin='0 auto'; let html = dom.innerHTML;
+            html = html.replace('[ชื่อ-สกุล ผู้รับรางวัล]', name).replace('[โรงเรียน/สังกัด]', item.school).replace('[รางวัล/เหรียญ]', `${item.award_name||''} ${item.medal||''}`).replace('[กิจกรรมย่อย]', item.activity);
+            const wrapper = document.createElement('div'); wrapper.innerHTML = html; const elNo = wrapper.querySelector('#el_cert_no'); if(elNo) elNo.innerText = 'เลขที่ ' + no;
+            return `<div class="print-page py-10"><div class="a4-preview ${document.getElementById('page_orientation').value}" style="transform: scale(0.65); transform-origin: top center; margin: 0 auto;">${wrapper.innerHTML}</div></div>`;
+        }
+        async function printAllPending() {
+            idsToPrint = printQueue.filter(x => x.status !== 'พิมพ์แล้ว').map(x => x.id);
+            if(idsToPrint.length === 0) return Swal.fire('Error', 'ไม่มีรายการรอพิมพ์', 'info');
+            Swal.fire({title: 'เตรียมข้อมูล...', didOpen:()=>Swal.showLoading()}); const nextNo = await fetchAndSetNextCertNo(); Swal.close();
+            let current = nextNo; let combined = '';
+            idsToPrint.forEach(id => {
+                const item = printQueue.find(x => x.id.toString() === id.toString());
+                const names = String(item.student).replace(/[\[\]"]/g, '').split(/,|\n/).map(n => n.trim()).filter(n => n.length > 0);
+                names.forEach(n => { combined += generateSingleCertHTML(item, n, current); current = incrementCode(current); });
+            });
+            document.getElementById('printPreviewModal').dataset.startNo = nextNo; showPreview(combined);
+        }
+        function showPreview(html) { 
+            document.getElementById('modalPreviewContainer').innerHTML = html; const m = document.getElementById('printPreviewModal'); const b = document.getElementById('previewModalBody');
+            m.classList.remove('hidden'); setTimeout(() => { b.classList.remove('scale-95', 'opacity-0'); b.classList.add('scale-100', 'opacity-100'); }, 10);
+        }
+        function closePreview() { const m = document.getElementById('printPreviewModal'); const b = document.getElementById('previewModalBody'); b.classList.add('scale-95', 'opacity-0'); setTimeout(() => { m.classList.add('hidden'); idsToPrint = []; }, 300); }
+        
+        async function confirmPrint() {
+            const m = document.getElementById('printPreviewModal');
+            const printMode = document.getElementById('print_mode_select').value;
+            m.classList.add('hidden');
+            
+            const printArea = document.getElementById('printArea'); 
+            printArea.innerHTML = ''; 
+            let printHTML = '';
+            const orient = document.getElementById('page_orientation').value; 
+            let current = document.getElementById('printPreviewModal').dataset.startNo || "001";
+            
+            const capture = document.getElementById('captureContainer');
+
+            // รวมทุกคิวเพื่อค้นหาข้อมูล
+            const allItems = [...printQueue, ...participationQueue, ...organizationQueue];
+            
+            // Prepare tasks for background processing
+            const tasks = [];
+
+            // 1. สร้างเนื้อหาสำหรับพิมพ์ (Print Loop) - ทำทันที
+            for (const id of idsToPrint) {
+                const item = allItems.find(x => x.id.toString() === id.toString());
+                if (!item) continue;
+                
+                const names = String(item.student).replace(/[\[\]"]/g, '').split(/,|\n/).map(n => n.trim()).filter(n => n.length > 0);
+                
+                for (const name of names) {
+                    // --- เตรียม HTML สำหรับพิมพ์ ---
+                    const printDOM = document.getElementById('previewArea').cloneNode(true);
+                    printDOM.querySelectorAll('.resizer').forEach(e => e.remove());
+                    const elNoPrint = printDOM.querySelector('#el_cert_no');
+                    if(elNoPrint) elNoPrint.innerText = 'เลขที่ ' + current;
+                    
+                    if (printMode === 'text') {
+                        const bgPrint = printDOM.querySelector('#prev_bg');
+                        if (bgPrint) bgPrint.style.display = 'none';
+                    }
+
+                    let printContent = printDOM.innerHTML
+                        .replace('[ชื่อ-สกุล ผู้รับรางวัล]', name)
+                        .replace('[โรงเรียน/สังกัด]', item.school)
+                        .replace('[รางวัล/เหรียญ]', `${item.award_name || ''} ${item.medal || ''}`)
+                        .replace('[กิจกรรมย่อย]', item.activity);
+                    
+                    printHTML += `<div class="print-page"><div class="a4-preview ${orient}" style="transform: none; box-shadow: none; margin: 0;">${printContent}</div></div>`;
+
+                    // เก็บข้อมูลไว้ทำภาพเบื้องหลัง
+                    tasks.push({
+                        item: item,
+                        name: name,
+                        certNo: current,
+                        type: currentTemplateType // captured from global scope
+                    });
+                    
+                    current = incrementCode(current);
+                }
+            }
+
+            // แสดงผลและสั่งพิมพ์ทันที
+            printArea.className = `hidden ${orient}`; 
+            printArea.innerHTML = printHTML;
+            setTimeout(() => { window.print(); }, 500);
+
+            // 2. ทำงานเบื้องหลัง: สร้างภาพและบันทึกข้อมูล (Background Task)
+            // ใช้ async IIFE เพื่อไม่ให้บล็อกการทำงานหลัก (แม้ window.print จะบล็อก UI แต่อันนี้จะรันต่อเมื่อพร้อม)
+            (async () => {
+                let logs = [];
+                
+                for (const task of tasks) {
+                     const { item, name, certNo, type } = task;
+
+                     // เตรียม HTML สำหรับจับภาพ (บังคับพื้นหลัง)
+                     const captureDOM = document.getElementById('previewArea').cloneNode(true);
+                     captureDOM.querySelectorAll('.resizer').forEach(e => e.remove());
+                     const elNoCap = captureDOM.querySelector('#el_cert_no');
+                     if(elNoCap) elNoCap.innerText = 'เลขที่ ' + certNo;
+                     
+                     const bgCap = captureDOM.querySelector('#prev_bg');
+                     if (bgCap) bgCap.style.display = 'block'; // Force background ON
+
+                     let captureContent = captureDOM.innerHTML
+                         .replace('[ชื่อ-สกุล ผู้รับรางวัล]', name)
+                         .replace('[โรงเรียน/สังกัด]', item.school)
+                         .replace('[รางวัล/เหรียญ]', `${item.award_name || ''} ${item.medal || ''}`)
+                         .replace('[กิจกรรมย่อย]', item.activity);
+
+                     const renderDiv = document.createElement('div');
+                     renderDiv.className = `a4-preview ${orient}`;
+                     renderDiv.style.transform = 'none';
+                     renderDiv.style.margin = '0';
+                     renderDiv.innerHTML = captureContent;
+                     
+                     capture.innerHTML = ''; 
+                     capture.appendChild(renderDiv);
+                     
+                     try {
+                         const canvas = await html2canvas(renderDiv, { scale: 2, useCORS: true, allowTaint: true });
+                         const res = await callAPI({ 
+                             action: 'uploadImage', 
+                             imageStr: canvas.toDataURL('image/jpeg', 0.8), 
+                             fileName: `CERT_${certNo}_${name}.jpg` 
+                         });
+                         logs.push({ no: certNo, student: name, activity: item.activity, type: type, link: res.status === 'success' ? res.url : '' });
+                     } catch(e) { console.error(e); }
+                }
+                
+                capture.innerHTML = ''; // Cleanup
+
+                // บันทึก Log และอัปเดตสถานะเงียบๆ
+                try {
+                    await Promise.all([
+                        ...idsToPrint.map(id => {
+                            const foundItem = allItems.find(x => x.id.toString() === id.toString());
+                            const sheetType = foundItem ? foundItem.type : 'award';
+                            return callAPI({ action: 'updatePrintStatus', id: id, sheetName: sheetType });
+                        }),
+                        callAPI({ action: 'logCertBatch', list: logs })
+                    ]);
+                    
+                    // อัปเดตรายการหน้าเว็บ (Refresh Tables)
+                    loadPrintQueue(); 
+                    loadOrganizationList(); 
+                } catch(e) { console.error(e); }
+            })();
+        }
+
+        // -- Participation Section Logic --
+        async function generateParticipationList() {
+            const act = document.getElementById('part_activity_select').value; Swal.fire({ title: 'ประมวลผล...', didOpen: () => Swal.showLoading() });
+            const res = await callAPI({ action: 'generateParticipation', activity: act }); Swal.close();
+            if(res.status === 'success') { Swal.fire('สำเร็จ', res.message, 'success'); loadParticipationList(); } else Swal.fire('Error', res.message, 'error');
+        }
+        async function loadParticipationList() {
+            const res = await callAPI({ action: 'getParticipationList' });
+            if(res.status === 'success') {
+                participationQueue = res.data; const tb = document.getElementById('participationTableBody'); tb.innerHTML = '';
+                participationQueue.forEach(i => { tb.innerHTML += `<tr class="border-b hover:bg-gray-50/50"><td class="p-5 font-bold text-nsBlue">${i.student}</td><td class="p-5 text-xs text-gray-500">${i.school}</td><td class="p-5 text-right"><button onclick="viewParticipationCert('${i.id}')" class="text-nsBlue font-bold underline"><i class="fas fa-eye"></i> ดูตัวอย่าง</button></td></tr>`; });
+            }
+        }
+        async function viewParticipationCert(id) {
+            const item = participationQueue.find(x => x.id === id); if(!item) return; idsToPrint = [id];
+            const prev = currentTemplateType; currentTemplateType = 'participate'; Swal.fire({title: 'โหลดดีไซน์...', didOpen:()=>Swal.showLoading()});
+            await loadTemplateDataDirect(item.activity); Swal.close();
+            const html = generateSingleCertHTML(item, item.student, 'Participate'); showPreview(html); currentTemplateType = prev;
+        }
+        async function loadTemplateDataDirect(actName) {
+            const res = await callAPI({ action: 'getTemplate', type: 'participate', activityId: actName });
+            if(res.status === 'success') {
+                const d = res.data; if(d.bgImageBase64) document.getElementById('prev_bg').src = d.bgImageBase64;
+                if(d.sigImageBase64) document.getElementById('prev_sig').src = d.sigImageBase64;
+                if(d.layout) for (const [id, val] of Object.entries(d.layout)) { const el = document.getElementById(id); if(el) el.setAttribute('style', val.style); }
+                const map = { el_agency: d.agency, el_activity_name: d.activity_name, el_signer: d.signer, el_position: d.position };
+                for(let k in map) { const el = document.getElementById(k); if(el && map[k]) el.innerText = map[k]; }
+            }
+        }
+
+        // -- ORGANIZATION Logic (NEW) --
+        function toggleSelectAllOrg(source) {
+            const checkboxes = document.querySelectorAll('.org-checkbox');
+            checkboxes.forEach(cb => cb.checked = source.checked);
+        }
+
+        async function printSelectedOrg() {
+            const checkboxes = document.querySelectorAll('.org-checkbox:checked');
+            if(checkboxes.length === 0) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกรายการที่ต้องการพิมพ์', 'warning');
+            
+            idsToPrint = Array.from(checkboxes).map(cb => cb.value);
+            
+            // เตรียมข้อมูลก่อนพิมพ์ (โหลด Template เข้าร่วมของกิจกรรมแรกที่เลือก เพื่อเป็นตัวตั้งต้น)
+            const firstItem = organizationQueue.find(x => x.id === idsToPrint[0]);
+            
+            const prevType = currentTemplateType; 
+            currentTemplateType = 'participate'; // ใช้เทมเพลตเข้าร่วมสำหรับหน่วยงาน
+            
+            Swal.fire({title: 'กำลังเตรียมข้อมูล...', didOpen:()=>Swal.showLoading()});
+            
+            // โหลดเทมเพลตของกิจกรรมนั้นๆ
+            await loadTemplateDataDirect(firstItem.activity);
+            
+            const nextNo = await fetchAndSetNextCertNo(); 
+            Swal.close();
+
+            // สร้างตัวอย่าง HTML สำหรับแสดงใน Modal (แสดงเฉพาะใบแรกเพื่อประหยัดทรัพยากร)
+            let combined = '';
+            const names = [firstItem.student]; // แสดงตัวอย่างแค่ชื่อแรก
+            let tempNo = nextNo;
+            
+            names.forEach(n => { 
+                combined += generateSingleCertHTML(firstItem, n, tempNo); 
+            });
+            
+            // ใส่ข้อความบอกว่ามีกี่รายการ
+            combined = `<div class="text-center mb-4 text-nsBlue font-bold">รายการที่เลือกทั้งหมด: ${idsToPrint.length} รายการ (แสดงตัวอย่างใบแรก)</div>` + combined;
+
+            document.getElementById('printPreviewModal').dataset.startNo = nextNo; 
+            showPreview(combined); 
+            
+            // Reset type back after close (handled in confirm logic or manual reset if needed)
+            // Note: confirmPrint handles logic based on global idsToPrint
+        }
+    </script>
+</body>
+</html>
